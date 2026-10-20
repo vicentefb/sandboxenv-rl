@@ -445,12 +445,11 @@ func buildWorkerPool(cfg manifestConfig) *atev1alpha1.WorkerPool {
 			Replicas:    cfg.replicas,
 			WorkerImage: cfg.workerImage,
 			// The CRD requires exactly one sandbox class per pool, and
-			// actors only schedule onto workers of their template's class,
-			// so keep this in step with buildActorTemplate. The configRef is
-			// the SandboxConfig the workers run; the template names the same
-			// one in sandboxConfig.configName.
+			// The pool alone picks the sandbox runtime (substrate#2780): the
+			// configRef names the SandboxConfig its workers run, and the
+			// template carries no sandbox config of its own.
 			SandboxClasses: []atev1alpha1.WorkerPoolSandboxClass{{
-				Name:      atev1alpha1.SandboxClassGvisor, // the template's sandboxConfig.sandboxClass is the same string
+				Name:      atev1alpha1.SandboxClassGvisor, // the pool, not the template, now picks the sandbox runtime
 				ConfigRef: &atev1alpha1.SandboxConfigReference{Name: sandboxConfigName},
 			}},
 		},
@@ -488,10 +487,6 @@ func buildActorTemplate(cfg templateConfig) *ateapipb.ActorTemplate {
 			// state intact. MEMORY is also the server default, but the API
 			// schema marks the field required, so say it explicitly.
 			PreferredFidelity: ateapipb.SnapshotFidelity_SNAPSHOT_FIDELITY_MEMORY,
-		},
-		SandboxConfig: &ateapipb.SandboxConfig{
-			SandboxClass: string(atev1alpha1.SandboxClassGvisor),
-			ConfigName:   sandboxConfigName,
 		},
 		Resources: &ateapipb.Resources{Limits: []*ateapipb.Limits{
 			{Name: "cpu", Quantity: orDefault(cfg.cpu, defaultActorCPU)},

@@ -116,13 +116,8 @@ func TestBuildManifests(t *testing.T) {
 	if sc.Name != atev1alpha1.SandboxClassGvisor || sc.ConfigRef == nil || sc.ConfigRef.Name != sandboxConfigName {
 		t.Errorf("workerpool sandboxClasses[0] = %+v, want gvisor with configRef %q", sc, sandboxConfigName)
 	}
-	// The pool's class and the template's are the same string since
-	// substrate#2586 made the proto field a string. A pool of the wrong class
-	// never hosts the template's actors.
-	tmplClass := buildActorTemplate(testTemplateConfig()).GetSandboxConfig().GetSandboxClass()
-	if tmplClass != string(sc.Name) {
-		t.Errorf("workerpool sandbox class %q != template sandbox class %q", sc.Name, tmplClass)
-	}
+	// Since substrate#2780 the pool alone picks the sandbox runtime; the
+	// template carries no sandbox config.
 
 	deployment := objs[2].(*appsv1.Deployment)
 	containers := deployment.Spec.Template.Spec.Containers
@@ -165,9 +160,6 @@ func TestBuildActorTemplate(t *testing.T) {
 	if got := template.GetSnapshotConfig().GetGoldenSnapshotConfig(); got != nil {
 		t.Errorf("golden snapshot config = %v, want nil (omitted means enabled)", got)
 	}
-	if got := template.GetSandboxConfig().GetConfigName(); got != sandboxConfigName {
-		t.Errorf("sandbox config name = %q, want %q (must match the WorkerPool configRef)", got, sandboxConfigName)
-	}
 	if template.GetWorkerSelector() != nil {
 		t.Errorf("worker selector = %v, want nil", template.WorkerSelector)
 	}
@@ -178,9 +170,6 @@ func TestBuildActorTemplate(t *testing.T) {
 	// Substrate rejects an ActorTemplate without both limits (substrate#2285).
 	if got := limits(template); got["cpu"] != defaultActorCPU || got["memory"] != defaultActorMemory || len(got) != 2 {
 		t.Errorf("resources.limits = %v, want cpu=%s memory=%s", got, defaultActorCPU, defaultActorMemory)
-	}
-	if got := template.GetSandboxConfig().GetSandboxClass(); got != "gvisor" {
-		t.Errorf("sandbox class = %q, want gvisor (Substrate accepts gvisor or microvm)", got)
 	}
 }
 
@@ -368,7 +357,7 @@ func TestManifestTemplateCommandExecution(t *testing.T) {
 	if !strings.Contains(out, "image: example.com/guest@sha256:aaaa") || !strings.Contains(out, "storageLocation: gs://bucket/prefix/") {
 		t.Errorf("expected guest image and storage location in output:\n%s", out)
 	}
-	for _, want := range []string{"sandboxClass: gvisor", "name: cpu\n    quantity: \"4\"", "name: memory\n    quantity: 8Gi"} {
+	for _, want := range []string{"name: cpu\n    quantity: \"4\"", "name: memory\n    quantity: 8Gi"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}

@@ -292,18 +292,6 @@ func (s *Server) suspend(a *ateapipb.Actor) {
 	}
 }
 
-func (s *Server) PauseActor(ctx context.Context, req *ateapipb.PauseActorRequest) (*ateapipb.PauseActorResponse, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	a, err := s.get(req.GetActor())
-	if err != nil {
-		return nil, err
-	}
-	// Substrate reports a paused actor as SUSPENDED (substrate#2620).
-	a.Status = &ateapipb.ActorStatus{State: ateapipb.ActorState_ACTOR_STATE_SUSPENDED}
-	return &ateapipb.PauseActorResponse{Actor: clone(a)}, nil
-}
-
 func (s *Server) DeleteActor(ctx context.Context, req *ateapipb.DeleteActorRequest) (*ateapipb.Actor, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
