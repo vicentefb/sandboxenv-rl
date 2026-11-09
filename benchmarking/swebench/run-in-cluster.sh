@@ -15,8 +15,8 @@
 # limitations under the License.
 
 # Run swebench-loader inside the cluster, next to ate-env-api, and bring the
-# events file back. The dataset, offline-exclusions.txt and any -trajectory
-# file (with the files next to it) are baked into the loader image (ko's
+# events file back. The dataset, offline-exclusions.txt, a -placement plan and
+# any -trajectory file (with the files next to it) are baked into the loader image (ko's
 # kodata directory), so the pod needs no bucket access; a
 # sidecar keeps the pod alive after the loader exits so the results can be
 # copied out with kubectl cp. The Job is deleted when the script exits, on
@@ -264,6 +264,14 @@ while (( $# )); do
       bake_trajectory "$2"; ARGS+=("$1" "${BAKED}"); shift 2 ;;
     -trajectory=*|--trajectory=*)
       bake_trajectory "${1#*=}"; ARGS+=("${1%%=*}=${BAKED}"); shift ;;
+    -placement|--placement)
+      # image-placement.json is baked next to the dataset and the flag
+      # rewritten to the baked path, like the dataset and the trajectories.
+      [[ $# -ge 2 && -f "$2" ]] || { echo "$1 needs an existing file" >&2; exit 2; }
+      cp "$2" "${KODATA}/placement.json"; ARGS+=("$1" "/var/run/ko/placement.json"); shift 2 ;;
+    -placement=*|--placement=*)
+      [[ -f "${1#*=}" ]] || { echo "${1%%=*} needs an existing file" >&2; exit 2; }
+      cp "${1#*=}" "${KODATA}/placement.json"; ARGS+=("${1%%=*}=/var/run/ko/placement.json"); shift ;;
     *)
       ARGS+=("$1"); shift ;;
   esac
