@@ -38,6 +38,12 @@
 # its trap runs, the Job ends by itself after 48 hours (activeDeadlineSeconds)
 # and is removed an hour after it finishes; Ctrl-C runs the trap and deletes
 # the Job at once, results included.
+# LOADER_NODEPOOL, when set, pins the loader pod to that GKE node pool
+# (cloud.google.com/gke-nodepool), and LOADER_TOLERATION_KEY lets it tolerate
+# the pool's NoSchedule taint. Without them the pod lands wherever the
+# scheduler puts it; several shards then share the few untainted nodes, and a
+# drain of one of them (a node-pool upgrade, say) ends every shard on it with
+# its events file, since the Job does not retry.
 # AUTH_TOKEN_SECRET names a Secret in NAMESPACE whose key `token` holds
 # ate-env-api's bearer token; the loader then reads it from
 # SUBSTRATE_ENV_AUTH_TOKEN. Leave it unset for an API without a token.
@@ -345,6 +351,18 @@ if (( BUNDLE_MODE == 1 )); then
 fi
 
 kc -n "${NS}" delete job "${JOB}" --ignore-not-found --wait=true >/dev/null
+LOADER_PLACEMENT_YAML=""
+if [[ -n "${LOADER_NODEPOOL:-}" ]]; then
+  LOADER_PLACEMENT_YAML="      nodeSelector:
+        cloud.google.com/gke-nodepool: ${LOADER_NODEPOOL}"
+  if [[ -n "${LOADER_TOLERATION_KEY:-}" ]]; then
+    LOADER_PLACEMENT_YAML="${LOADER_PLACEMENT_YAML}
+      tolerations:
+        - key: ${LOADER_TOLERATION_KEY}
+          operator: Exists
+          effect: NoSchedule"
+  fi
+fi
 # busybox 1.36, pinned by digest; Docker Hub rate-limits unauthenticated pulls.
 cat <<EOF_JOB | kc apply -f -
 apiVersion: batch/v1
@@ -365,6 +383,7 @@ spec:
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false
+${LOADER_PLACEMENT_YAML}
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532

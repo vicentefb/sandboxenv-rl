@@ -387,6 +387,19 @@ the same command with a different context and run id is how two clusters are
 compared. For an API with a token, set `AUTH_TOKEN_SECRET`
 to a Secret in the namespace whose key `token` holds it; the Job passes it to
 the loader as `SUBSTRATE_ENV_AUTH_TOKEN`.
+`LOADER_NODEPOOL=<gke node pool>` (with `LOADER_TOLERATION_KEY=<taint key>` if
+the pool is tainted) pins the loader pod to a node pool; without it several
+shards share the few untainted nodes, and a drain of one of them ends every
+shard on it, events included, because the Job does not retry.
+
+Running several shards at once: start the `run-in-cluster.sh` invocations at
+least 60 s apart, because each bakes its dataset into the same `kodata`
+directory before `ko build` and two builds in the same seconds take each
+other's files (the loser's loader exits with `open dataset ... no such file`).
+In eval mode the per-loader `-delete-rate` (200/s by default) caps the shard's
+task rate at that many tasks per second once starts are warm; raise it for a
+throughput run. The events file lives in the pod until the copy at the end, so
+a shard that loses its pod loses its events.
 
 ## Image-delivery workloads
 
