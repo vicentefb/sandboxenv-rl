@@ -89,6 +89,12 @@ type Config struct {
 	Width int
 	// TasksPerImage is the eval mode fan-out per image.
 	TasksPerImage int
+	// TaskOrder is the order eval mode visits (image, replay) pairs: "image"
+	// (the default) runs every replay of an image back to back; "round" runs
+	// replay k of every image before replay k+1, so the replays of one image
+	// are spread over the run. With -placement, "image" sends an image's
+	// TasksPerImage creates to the same node at once.
+	TaskOrder string
 	// Rollouts and Steps shape steps mode: Instances x Rollouts environments
 	// driven through Steps training steps.
 	Rollouts int
@@ -207,6 +213,9 @@ func (c *Config) labels() map[string]string {
 	switch c.Mode {
 	case ModeEval:
 		l["tasks_per_image"] = strconv.Itoa(c.TasksPerImage)
+		if c.TaskOrder != "" {
+			l["task_order"] = c.TaskOrder
+		}
 	case ModeSteps:
 		l["rollouts"] = strconv.Itoa(c.Rollouts)
 		l["steps"] = strconv.Itoa(c.Steps)
@@ -341,6 +350,11 @@ func (c *Config) validate() error {
 	case ModeEval:
 		if c.TasksPerImage < 1 {
 			return errors.New("tasks per image must be >= 1")
+		}
+		switch c.TaskOrder {
+		case "", TaskOrderImage, TaskOrderRound:
+		default:
+			return fmt.Errorf("task order must be %q or %q, got %q", TaskOrderImage, TaskOrderRound, c.TaskOrder)
 		}
 	case ModeSteps:
 		if c.Rollouts < 1 || c.Steps < 1 {
@@ -751,7 +765,34 @@ func (r *runner) plan() ([]*environment, error) {
 			})
 		}
 	}
+	if r.cfg.Mode == ModeEval && r.cfg.TaskOrder == TaskOrderRound {
+		envs = roundOrder(envs, len(r.cfg.Instances), fanout)
+	}
 	return envs, nil
+}
+
+// Task orders for eval mode; see Config.TaskOrder.
+const (
+	TaskOrderImage = "image"
+	TaskOrderRound = "round"
+)
+
+// roundOrder reorders envs planned image-major (instance i, replay k at
+// index i*fanout+k) into round-major order (replay 0 of every instance, then
+// replay 1, ...), keeping the instance order within a round. The trajectory
+// picked for each environment is unchanged, so a seed still assigns the
+// same trajectory to the same environment.
+func roundOrder(envs []*environment, instances, fanout int) []*environment {
+	if fanout <= 1 || len(envs) != instances*fanout {
+		return envs
+	}
+	out := make([]*environment, 0, len(envs))
+	for k := 0; k < fanout; k++ {
+		for i := 0; i < instances; i++ {
+			out = append(out, envs[i*fanout+k])
+		}
+	}
+	return out
 }
 
 // EnvID derives a Substrate-valid name (lowercase alphanumerics and '-', at

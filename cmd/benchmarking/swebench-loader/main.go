@@ -827,6 +827,7 @@ func runCmd(args []string) (retErr error) {
 		width            = fs.Int("width", 50, "Most tasks in flight at once.")
 		arrivalRate      = fs.Float64("arrival-rate", 0, "open-loop: Poisson task arrival rate in tasks/sec.")
 		tasksPerImage    = fs.Int("tasks-per-image", 1, "eval: replays per image.")
+		taskOrder        = fs.String("task-order", "image", "eval: the order of the (image, replay) pairs. image runs an image's replays back to back; round runs replay k of every image before replay k+1, which spreads one image's creates over the run (with -placement they all land on one node).")
 		rollouts         = fs.Int("rollouts", 2, "steps: environments per image.")
 		steps            = fs.Int("steps", 8, "steps: training steps.")
 		park             = fs.String("park", string(swebench.ParkSuspend), "steps: what happens between steps. suspend and suspend-sync are durable: the call returns once the snapshot is in object storage. suspend-async is local: the call returns once the snapshot is on the node and the upload goes on in the background. fork replaces each environment per step (through ate-env-api a new environment created from the image; with -access direct a fork of its base) and parks it locally. delete deletes, and the next step creates again. none keeps the fleet running. Through ate-env-api a local suspend needs a server that serves suspend_mode, which the run checks before it starts.")
@@ -1062,6 +1063,7 @@ func runCmd(args []string) (retErr error) {
 		Width:         *width,
 		ArrivalRate:   *arrivalRate,
 		TasksPerImage: *tasksPerImage,
+		TaskOrder:     *taskOrder,
 		Rollouts:      *rollouts,
 		Steps:         *steps,
 		Park:          swebench.Park(*park),
